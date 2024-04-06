@@ -3,6 +3,8 @@ name = "ffd"
 version = "0.1.0-alpha.0"
 edition = "2021"
 description = "Fast Function Dispatch: Improving the performance of Rust's dynamic function calls"
+authors = ["Joshua Barretto <joshua@jsbarretto.com.com>"]
+license = "MIT"
 
 [features]
 nightly = []
