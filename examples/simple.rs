@@ -1,3 +1,5 @@
+use ffd::Func;
+
 fn main() {
     struct NontrivialDrop;
     impl Drop for NontrivialDrop {

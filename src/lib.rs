@@ -1,6 +1,12 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg), deny(rustdoc::all))]
 #![cfg_attr(feature = "nightly", feature(unboxed_closures, tuple_trait, fn_traits))]
+#![no_std]
+
+extern crate alloc;
+
+use alloc::boxed::Box;
+use core::mem::MaybeUninit;
 
 /// A boxed function.
 ///
@@ -20,7 +26,7 @@ struct WithDrop<F> {
 impl<T, O> Drop for Func<T, O> {
     fn drop(&mut self) {
         unsafe {
-            let drop_fn = core::mem::transmute::<_, &WithDrop<()>>(self.data).drop_fn;
+            let drop_fn = core::mem::transmute::<_, &WithDrop<MaybeUninit<()>>>(self.data).drop_fn;
             drop_fn(self.data)
         }
     }

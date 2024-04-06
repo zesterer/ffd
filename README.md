@@ -1,8 +1,16 @@
 # Fast Function Dispatch: Improving the performance of Rust's dynamic function calls
 
-A library providing a safe, pragmatic API for high-performance virtual function calls.
+[![crates.io](https://img.shields.io/crates/v/ffd.svg)](https://crates.io/crates/ffd)
+[![crates.io](https://docs.rs/ffd/badge.svg)](https://docs.rs/ffd)
+[![License](https://img.shields.io/crates/l/ffd.svg)](https://github.com/zesterer/ffd)
+[![actions-badge](https://github.com/zesterer/ffd/workflows/Rust/badge.svg?branch=master)](https://github.com/zesterer/ffd/actions)
 
-## Features
+A safe, pragmatic toolkit for high-performance virtual function calls.
+
+This library provides alternatives to types like `Box<dyn Fn(...) -> _>` that are more performant in a range of
+scenarios.
+
+## Feature flags
 
 - `nightly`: Implements `Fn` for `Func`, as well as allowing `Func::new` to accept multi-argument closures
 
@@ -18,7 +26,7 @@ Sadly, an exception to this rule is *function dispatch*.
 Rust's strategy, upon seeing a trait like the following, and a corresponding `dyn` coercion, is to generate a
 [vtable](https://doc.rust-lang.org/nomicon/exotic-sizes.html?highlight=vtable#dynamically-sized-types-dsts).
 
-```
+```ignore
 trait MyTrait {
     fn do_something(&self);
     fn do_something_else(&self, x: i32);
@@ -34,7 +42,7 @@ impl MyTrait for MyStruct {
 
 The vtable might look something like this:
 
-```
+```ignore
 struct MyTraitVtable {
     // `*const ()` represents the `&self` argument of `do_something`
     do_something: fn(*const ()),
@@ -48,11 +56,14 @@ static MYSTRUCT_MYTRAIT_VTABLE: MyTraitVtable = MyTraitVtable {
 ```
 
 By and large, this is a reasonable strategy: when the compiler sees `&dyn MyTrait`, it'll internally represent this as
-something akin to the following data type:
+wide pointer, somewhat akin to the following tuple:
 
+```ignore
+(*const (), *const MyTraitVtable)
 ```
-(<pointer to data>, <pointer to vtable>)
-```
+
+The first field represents the pointer to the data, `&self`. The second field is the vtable, allowing us to look up
+methods at runtime.
 
 When calling a method on the trait object, the compiler will generate code that first dereferences the vtable pointer to
 find the vtable, and then selects the field corresponding to the method being invoked. This field is a function pointer:
