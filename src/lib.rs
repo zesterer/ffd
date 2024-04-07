@@ -6,16 +6,17 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::mem::MaybeUninit;
+use core::{marker::PhantomData, mem::MaybeUninit};
 
 /// A boxed function.
 ///
 /// You can see this as semantically equivalent to a `Box<dyn Fn<T, Output = O>>`.
 ///
 /// With the `nightly` feature enabled, this type implements [`Fn`].
-pub struct Func<T, O> {
+pub struct Func<'a, T, O> {
     f: unsafe fn(*const (), T) -> O,
     data: *mut (),
+    phantom: PhantomData<&'a ()>,
 }
 
 struct WithDrop<F> {
@@ -23,7 +24,7 @@ struct WithDrop<F> {
     f: F,
 }
 
-impl<T, O> Drop for Func<T, O> {
+impl<'a, T, O> Drop for Func<'a, T, O> {
     fn drop(&mut self) {
         unsafe {
             let drop_fn = core::mem::transmute::<_, &WithDrop<MaybeUninit<()>>>(self.data).drop_fn;
@@ -32,12 +33,12 @@ impl<T, O> Drop for Func<T, O> {
     }
 }
 
-impl<T, O> Func<T, O> {
+impl<'a, T, O> Func<'a, T, O> {
     /// Create a new [`Func`] encapsulating the provided function, `f`.
     ///
     /// When the [`Func`] is dropped, the encapsulated function will be too.
     #[cfg(any(not(feature = "nightly"), docsrs))]
-    pub fn new<F: Fn(T) -> O>(f: F) -> Self {
+    pub fn new<F: Fn(T) -> O + 'a>(f: F) -> Self {
         #[inline(always)]
         unsafe fn invoke<F: Fn(T) -> O, T, O>(data: *const (), args: T) -> O {
             let wd = core::mem::transmute::<_, &WithDrop<F>>(data);
@@ -54,6 +55,7 @@ impl<T, O> Func<T, O> {
                 drop_fn: unsafe { core::mem::transmute(do_drop::<F> as unsafe fn(_)) },
                 f,
             })) as _,
+            phantom: PhantomData,
         }
     }
 
@@ -69,13 +71,13 @@ mod nightly {
 
     use core::marker::Tuple;
 
-    impl<T: Tuple, O> Func<T, O> {
+    impl<'a, T: Tuple, O> Func<'a, T, O> {
         /// Create a new [`Func`] encapsulating the provided function, `f`.
         ///
         /// When the [`Func`] is dropped, the encapsulated function will be too.
         ///
         /// Note that the given function can accept an arbitrary set of arguments.
-        pub fn new<F: Fn<T, Output = O>>(f: F) -> Self {
+        pub fn new<F: Fn<T, Output = O> + 'a>(f: F) -> Self {
             #[inline(always)]
             unsafe fn invoke<F: Fn<T, Output = O>, T: Tuple, O>(data: *const (), args: T) -> O {
                 let wd = core::mem::transmute::<_, &WithDrop<F>>(data);
@@ -92,24 +94,25 @@ mod nightly {
                     drop_fn: unsafe { core::mem::transmute(do_drop::<F> as unsafe fn(_)) },
                     f,
                 })) as _,
+                phantom: PhantomData,
             }
         }
     }
 
-    impl<T: Tuple, O> FnOnce<T> for Func<T, O> {
+    impl<'a, T: Tuple, O> FnOnce<T> for Func<'a, T, O> {
         type Output = O;
         #[inline(always)]
         extern "rust-call" fn call_once(self, args: T) -> O {
             unsafe { (self.f)(self.data, args) }
         }
     }
-    impl<T: Tuple, O> FnMut<T> for Func<T, O> {
+    impl<'a, T: Tuple, O> FnMut<T> for Func<'a, T, O> {
         #[inline(always)]
         extern "rust-call" fn call_mut(&mut self, args: T) -> O {
             unsafe { (self.f)(self.data, args) }
         }
     }
-    impl<T: Tuple, O> Fn<T> for Func<T, O> {
+    impl<'a, T: Tuple, O> Fn<T> for Func<'a, T, O> {
         #[inline(always)]
         extern "rust-call" fn call(&self, args: T) -> O {
             unsafe { (self.f)(self.data, args) }
