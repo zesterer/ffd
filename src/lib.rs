@@ -19,6 +19,7 @@ pub struct Func<'a, T, O> {
     phantom: PhantomData<&'a ()>,
 }
 
+#[repr(C)]
 struct WithDrop<F> {
     drop_fn: unsafe fn(*mut ()),
     f: F,
